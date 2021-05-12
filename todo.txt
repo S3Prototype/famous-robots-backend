@@ -1,0 +1,13 @@
+* Test out file uploading over REST, since that will be the biggest challenge.
+* Set up user login and registration logic.
+    * Create user schema
+        * Consider non-obvious things to add.
+        * Like seen array. Keeps a list of names of robots the user has already seen. If they've never seen it before, on the frontend you can put a "NEW!" sticker over the robot.
+    * Manually add the Admin user to the User collection
+* Set up Robot logic
+    * Create robot scheme
+    * Create a collection on atlas for mongodb storage of robots
+        * Manually add the given robots to the robot collection
+* Once users can login, log out and register, as well as vote for robots, create, edit and delete them, we'll be done with the foundational concepts of the backend.
+* Next is trying to add oauth for google or twitter.
+* Then we do code cleanup. Separate routes into files. Separate out logic.

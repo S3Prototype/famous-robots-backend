@@ -1,0 +1,5 @@
+5/11/2021
+- When users go to the login page on the front end, it should automatically send a fetch request to the server with a web token from localstorage, and a username (maybe also add device for further security).
+    * From there, verify their token and username.
+    * If they're verified, send back a message to log them in.
+        * Make sure to say whether they're an admin or not.
