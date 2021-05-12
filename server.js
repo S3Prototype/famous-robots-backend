@@ -4,9 +4,10 @@ const cors = require('cors')
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const User = require('./schemas/user')
-const Robot = require('./schemas/robot')
+const Robots = require('./schemas/robot')
 const jwt = require('jsonwebtoken')
 const multer = require('multer')
+const cloudinary = require('cloudinary').v2
 
 const storage = multer.diskStorage({
     destination: function(req, file, cb){
@@ -37,8 +38,10 @@ const upload = multer({
 
 // const store = new session.MemoryStore()
 
+console.log(process.env.NODE_ENV)
+
 mongoose.connect(
-    `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@cluster0.rqrfn.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`,
+    `mongodb+srv://RoomMaster297:21bOqE5aX7Du@cluster0.rqrfn.mongodb.net/FamousRobots?retryWrites=true&w=majority`,
     {
         useNewUrlParser:true,
         useUnifiedTopology:true
@@ -73,9 +76,49 @@ const authenticateToken = (req, res, next)=>{
     })
 }
 
-app.post('/upload', upload.single('robotImage'), (req, res, next)=>{
-    console.log(req.file.path)
-    res.json({info: "Well done"})
+app.post('/api/addrobot', upload.single('robotImage'), (req, res, next)=>{
+    // Have to check if they even sent an image. If not, return with error.
+    if(!req.file.path)
+        return res.status(400).json({message: `Please add an image for your robot.`})
+    
+    // cloudinary.uploader.upload(req.file.path, (error, result)=>{
+    //     if(result){
+            Robots.findOne({name:req.body.name},
+                async (err, robotData)=>{
+                    if(err)
+                        return res.status(500).json({message: `Server error. Your robot was not saved. Please try again. ${err}`})
+                        //If we find a robot that matches, can't add this robot.
+                        //It already exists.
+                    if(robotData)
+                        return res.status(400).json({message: `Could not create robot. "${req.body.robot.name}" already exists!`})
+                    
+                    const {name} = req.body   
+                    const image = `http://localhost:3100/robots/images/${req.file.originalname}`
+                    const id = Math.floor(Math.random()*1000000) 
+                    const newRobot = new Robot({name, image, id, votes:0})
+                    newRobot.isNew = true
+                    try{
+                        await newRobot.save()                
+                        return res.send(200).json({
+                            success: true,
+                            message: `${name} successfully created.`,
+                            robot: {
+                                name,
+                                image,
+                                id,
+                                votes: 0
+                            }
+                        })
+                    } catch(err){
+                        return res.send(500).json({message: `Could not create ${name}. Server error. ${err}`})
+                    }
+                }
+            )
+            // res.status(200).json({success: true}) // all done, send data back to client
+    //     } //Cloudinary stuff
+    // })
+
+    // res.json({info: "Well done"})
 })
 
 let tokenContainer = []
@@ -191,5 +234,5 @@ app.get('/', function (req, res) {
     res.send(`Famous Robots Backend`)
 }) 
 
-// var port = process.env.PORT || '3100';
-app.listen(()=>{console.log("Listening on port:")})
+var port = process.env.PORT || '3100';
+app.listen(port, ()=>{console.log("Listening on port:", port)})
