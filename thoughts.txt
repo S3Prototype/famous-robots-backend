@@ -1,3 +1,13 @@
+5/12/2021
+- Right now, in order to authenticate the admin account for adding new robots, data must be sent through headers. In order to work around this, I have a plan:
+    1. On the client side, we'll send 2 requests instead of 1 whenever an admin tries to add a robot.
+    2. First request simply authenticates with username and auth token or password.
+        * It responds with an auth token that dies in 30 seconds.
+        * This token has its own unique secret attached to it.
+    3. Client receives the response and temporary auth token, then sends a post request to the addrobot route with this token as its header. This will verify the token, and if it's right, allows the user to post the robot. Responds with the successfully created robot object or an object with a failure message.
+I will implement this after fully testing the frontend with my more crude, straightforward solution I currently have working.
+
+
 5/11/2021
 - When users go to the login page on the front end, it should automatically send a fetch request to the server with a web token from localstorage, and a username (maybe also add device for further security).
     * From there, verify their token and username.

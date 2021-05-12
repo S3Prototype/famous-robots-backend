@@ -5,3 +5,16 @@
 .env
 
 **/.env
+
+
+#images:
+/uploads
+/robotImages
+**/*.png
+**/*.jpg
+**/*.gif
+**/*.jpeg
+*.png
+*.jpg
+*.jpeg
+*.gif

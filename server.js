@@ -4,10 +4,16 @@ const cors = require('cors')
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const User = require('./schemas/user')
-const Robots = require('./schemas/robot')
+const Robot = require('./schemas/robot')
 const jwt = require('jsonwebtoken')
 const multer = require('multer')
+const randomString = require('random-string')
 const cloudinary = require('cloudinary').v2
+const ObjectID = require('mongodb').ObjectID;
+
+
+const REFRESH_SECRET = 'littlesecret000'
+const ACCESS_SECRET = 'bigsecret100'
 
 const storage = multer.diskStorage({
     destination: function(req, file, cb){
@@ -19,6 +25,9 @@ const storage = multer.diskStorage({
 })
 
 const fileFilter = (req, file, cb)=>{
+    if(!req.validated || !req.isAdmin){
+        return cb(null, false) 
+    }
     switch(file.mimetype){
         case 'image/jpeg':
         case 'image/gif':
@@ -38,87 +47,134 @@ const upload = multer({
 
 // const store = new session.MemoryStore()
 
-console.log(process.env.NODE_ENV)
+// console.log(process.env.NODE_ENV)
 
 mongoose.connect(
-    `mongodb+srv://RoomMaster297:21bOqE5aX7Du@cluster0.rqrfn.mongodb.net/FamousRobots?retryWrites=true&w=majority`,
+    `mongodb+srv://RoomMaster297:30t^FQdBmHGn@cluster0.rqrfn.mongodb.net/famousrobots?retryWrites=true&w=majority`,
     {
         useNewUrlParser:true,
         useUnifiedTopology:true
     },
-    ()=>{
-        console.log(`mongoose is connected`)
-    })
+    (err)=>{
+        if(!err)
+            console.log(`mongoose is connected`)
+        else
+            console.log("Mongoose connection failed", err)
+    }
+)
 
 app.use('/robots/images', express.static('robotImages'))
 app.use(express.json())
 app.use(express.urlencoded({extended:true}))
-// app.use(cors())
 
-
-const authenticateToken = (req, res, next)=>{
-    const authHeader = req.headers['authorization']
-
-    const token = authHeader && authHeader.split(' ')[1]
-    if(!token) return res.status(401).send({info: "Log in to load up your API tokens."})
-
-    jwt.verify(token, process.env.ACCESS_SECRET, (err, user)=>{
-        if(err) return res.status(403).send({info: "Error loading your API tokens. Please log in."})
-
-        const foundToken = tokenContainer.find(item=>item.accessToken === token)
-
-        if(foundToken){
-            req.user = foundToken.user
-            next()
-        } else {
-            res.status(403).send({info: "User not authenticated. Please log in."})
-        }
-    })
+const generateID = ()=>{
+    return randomString({length:17})+new Date().getMilliseconds()
 }
 
-app.post('/api/addrobot', upload.single('robotImage'), (req, res, next)=>{
-    // Have to check if they even sent an image. If not, return with error.
-    if(!req.file.path)
-        return res.status(400).json({message: `Please add an image for your robot.`})
-    
-    // cloudinary.uploader.upload(req.file.path, (error, result)=>{
-    //     if(result){
-            Robots.findOne({name:req.body.name},
-                async (err, robotData)=>{
-                    if(err)
-                        return res.status(500).json({message: `Server error. Your robot was not saved. Please try again. ${err}`})
-                        //If we find a robot that matches, can't add this robot.
-                        //It already exists.
-                    if(robotData)
-                        return res.status(400).json({message: `Could not create robot. "${req.body.robot.name}" already exists!`})
-                    
-                    const {name} = req.body   
-                    const image = `http://localhost:3100/robots/images/${req.file.originalname}`
-                    const id = Math.floor(Math.random()*1000000) 
-                    const newRobot = new Robot({name, image, id, votes:0})
-                    newRobot.isNew = true
-                    try{
-                        await newRobot.save()                
-                        return res.send(200).json({
-                            success: true,
-                            message: `${name} successfully created.`,
-                            robot: {
-                                name,
-                                image,
-                                id,
-                                votes: 0
-                            }
-                        })
-                    } catch(err){
-                        return res.send(500).json({message: `Could not create ${name}. Server error. ${err}`})
+const authenticateToken = (req, res, next)=>{
+    // Redo all this. Just check and validate the token.
+    // If the token is validated, set a req.validated = true.
+    // Otherwise, req.validated = false.
+
+    req.validated = false
+    req.isAdmin = false
+
+    const authHeader = req.headers['authorization']
+    const addRobot =  req.headers['addrobot']
+    const username = req.headers['username']
+    console.log(username)
+
+        //Get the token by splitting auth into an array and taking 2nd item
+    const token = authHeader && authHeader.split(' ')[1]    
+    if(!token){
+        console.log("Token wasn't found while trying to authenticate.")
+        next()
+    } else {
+            //Might have to promisify this, because need to call next()
+            //when it's done.
+        jwt.verify(token, ACCESS_SECRET, (err, user)=>{
+            if(err){
+                console.log('Error trying to verify an access token. JWT may be broken.')
+                return next()                
+            } else {                
+                const foundToken = tokenContainer.find(item=>item.accessToken === token)
+                
+                if(foundToken){
+                    if(addRobot){
+                        User.findOne({username},
+                            async (err, userData)=>{
+                                if(err){
+                                    console.log("Error trying to find admin in database for adding robots", err)
+                                    return res.status(502).json({success: false, message: `Failed to login ${req.body.username}. Possible database rror. Please try again.`})            
+                                }
+
+                                if(userData && userData.isAdmin){
+                                    req.validated = true
+                                    req.isAdmin = true
+                                    req.token = foundToken
+                                    console.log("User was an admin.")
+                                    return next()
+                                }
+
+                                console.log("Neither error nor admin")
+
+                                return res.status(401).json({success: false, message: `Please log in as an admin to add robots.`})
+                            }    
+                        )                        
+                    } else {
+                        console.log("It wasn't an addrobotrequest")
+                        req.validated = true
+                        req.token = foundToken
+                        next()
                     }
                 }
-            )
-            // res.status(200).json({success: true}) // all done, send data back to client
-    //     } //Cloudinary stuff
-    // })
+    
+                // console.log(`After trying to verify jwt for ${req.body.username}, validated is:${req.validated}`)
+            }
+        })
+    }
 
-    // res.json({info: "Well done"})
+}
+
+app.post('/api/addrobot', authenticateToken, upload.single("robotImage"), (req, res, next)=>{
+    // Have to check if they even sent an image. If not, return with error.
+    if(!req.isAdmin || !req.validated)
+        return res.status(401).json({message: `Please log in as an admin to add a robot.`})
+
+    if(!req.file || !req.file.path)
+        return res.status(400).json({message: `Please add an image for your robot.`})
+    
+    Robot.findOne({name:req.body.name},
+        async (err, robotData)=>{
+            if(err)
+                return res.status(502).json({message: `Possible database error. Your robot was not saved. Please try again. ${err}`})
+
+                //If this robot already exists, can't add it.
+            if(robotData)
+                return res.status(400).json({message: `Could not create robot. "${req.body.name}" already exists!`})
+            
+            const newRobotData = {
+                name: req.body.name,
+                image: `http://localhost:3100/robots/images/${req.file.originalname}`,
+                _id: new ObjectID(),
+                votes: 0,
+            }
+            const newRobot = new Robot(newRobotData)
+            newRobot.isNew = true
+            try{
+                if(await newRobot.save())
+                    return res.status(201).json({
+                        success: true,
+                        message: `${newRobotData.name} successfully created.`,
+                        newRobotData,
+                    })
+                else throw new Error(`Failed to save robot ${name} to database. Possible MongoDB error.`)
+            } catch(err){
+                console.log(err)
+                return res.status(500).json({message: `Could not create ${name}. Server error. ${err}`})
+            }
+        }
+    )
 })
 
 let tokenContainer = []
@@ -141,44 +197,78 @@ app.post('/token', (req, res)=>{
     })
 })
 
-app.post('/users/login', (req, res)=>{
+app.post('/users/login', authenticateToken, (req, res, next)=>{
 
-    if(!req.body.username)
-        return res.send({info: 'Failed to log in. Please provide a username.'})
+    res.set({'Content-Type': 'application/json'})
+
+    if(!req.body.username){
+        console.log("We got in !req.body.username")
+        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a username.'})
+    }
 
     User.findOne({username:req.body.username},
         async (err, userData)=>{
             if(err){
-                console.log(err)
-                return res.status(500).send({info: `Failed to login ${req.body.username}. Possible server error.`})
+                console.log("Found an error looking in database", err)
+                return res.status(502).json({success: false, message: `Failed to login ${req.body.username}. Possible database rror. Please try again.`})            
             }
 
-            if(userData){     
-                const {username, password, isAdmin} = userData
+            if(userData){    
+                const {username, password, isAdmin, seen} = userData
                 console.log("Found user", userData)
-                
-                if(!await bcrypt.compare(req.body.password, password))
-                    return res.send({info: "Incorrect username or password."})
 
-                const accessToken = jwt.sign({username}, process.env.ACCESS_SECRET, {expiresIn: '12h'})
-                const refreshToken = jwt.sign(username, process.env.REFRESH_SECRET)
-                console.log("JWT name:", username)
-                tokenContainer.push({
-                    accessToken, 
-                    name: username
-                })
-                
-                return res.status(200).send({
+                const sendData = {
                     username,
                     isAdmin,
-                    accessToken,
-                    refreshToken,
-                    loggedIn: true,
-                    info: `Successfully logged in ${username}`,
-                    success: true,
-                })
+                    seen,
+                }
+
+                if(req.validated){
+                    console.log("We entered req.validated")
+                    return res.status(200).json({
+                        sendData,
+                        message: `Successfully logged in ${username}`,
+                        success: true,
+                    })
+                }
+                
+                if(req.body.password){
+                    console.log("We entered req.body.password")
+                    try{
+                        if(!isAdmin){
+                            const passwordIsCorrect = await bcrypt.compare(req.body.password, password)
+                            
+                            if(!passwordIsCorrect){
+                                console.log("Incorrect password")
+                                return res.status(401).json({success: false, message: 'Incorrect username or password.'})
+                            }
+                        }
+
+                        console.log("Got past await bcrypt")
+
+                        sendData.accessToken = jwt.sign({username}, ACCESS_SECRET, {expiresIn: '12h'})
+
+                        sendData.refreshToken = jwt.sign({username}, REFRESH_SECRET)
+
+                        console.log('JWT generated:', sendData.accessToken)
+                        tokenContainer.push({
+                            accessToken: sendData.accessToken, 
+                            name: username
+                        })
+                    } catch (err) {
+                        return res.status(502).json({success: false, message: `Authorization error. Your username and password may be correct, but we could not validate you at this time. ${err}`})
+                    }  
+                    
+                    return res.status(200).json({
+                        userData: sendData,
+                        message: `Successfully logged in ${username} and generated auth tokens.`,
+                        success: true,
+                    }) 
+                }
+
+            } else {                
+                return res.status(401).json({success: false, message: `Failed to login. Username or password incorrect.`})
             }
-            return res.status(400).send({info: `Failed to login. User ${req.body.username} not found.`})
         }
     )
 })
@@ -186,32 +276,38 @@ app.post('/users/login', (req, res)=>{
 app.post('/users/register', async (req, res)=>{
     
     if(!req.body.username || !req.body.password)
-        return res.send({info: 'Failed to log in. Please provide a username and password.'})
+        return res.status(400).send({info: 'Failed to register. Please provide a username and password.'})
 
     User.findOne({username:req.body.username},
         async (err, userData)=>{
-            if(err) throw err
+            if(err){
+                console.log("Found an error trying to register user in database", err)
+                return res.status(502).json({success: false, message: `Failed to register ${req.body.username}. Possible database rror. Please try again.`})          
+            }
             if(!userData){
-                const hashedPassword = await bcrypt.hash(req.body.password, 10)
+                const newUserData = {
+                    _id: new ObjectID(),
+                    username: req.body.username,
+                    isAdmin: false,
+                }
                 try{
-                    const newData = {
-                        username: req.body.username,
-                        password: hashedPassword,
-                    }
 
-                    const newUser = new User(newData)
+                    newUserData.password = await bcrypt.hash(req.body.password, 10)
+                    const newUser = new User(newUserData)
                     newUser.isNew = true
                     await newUser.save()
-                    res.send({
-                        info: `User ${newData.username} created`,
-                        name:newDate.username
+                        //From here user should be redirected to login page
+                    return res.status(200).json({
+                        _id: newUserData._id,
+                        message: `User ${newUserData.username} created`,
+                        username: newUserData.username
                     })
                 } catch(err){
                     console.log("Failed to save user", err)
-                    res.send({info: `Failed to create ${newData.username}.`})
+                    return res.status(502).json({success: false, message: `Failed to create ${newUserData.username}.`})
                 }                
             } else {
-                res.send({info: `User ${req.body.username} already exists`})
+                return res.status(400).json({success: false, message: `User ${req.body.username} already exists`})
             }                        
         }
     )

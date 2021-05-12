@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 
 const robot = new mongoose.Schema({
-    id: Number,
+    // id: Number,
     name: String,
     image: String,
     votes: Number,
