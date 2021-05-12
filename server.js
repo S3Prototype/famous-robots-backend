@@ -191,5 +191,5 @@ app.get('/', function (req, res) {
     res.send(`Famous Robots Backend`)
 }) 
 
-var port = process.env.PORT || '3100';
-app.listen(port, ()=>{console.log("Listening on port:", port)})
+// var port = process.env.PORT || '3100';
+app.listen(()=>{console.log("Listening on port:")})
