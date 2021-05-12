@@ -63,6 +63,7 @@ mongoose.connect(
     }
 )
 
+app.use(cors())
 app.use('/robots/images', express.static('robotImages'))
 app.use(express.json())
 app.use(express.urlencoded({extended:true}))
@@ -82,7 +83,7 @@ const authenticateToken = (req, res, next)=>{
     const authHeader = req.headers['authorization']
     const addRobot =  req.headers['addrobot']
     const username = req.headers['username']
-    console.log(username)
+    console.log("The body is", req.body)
 
         //Get the token by splitting auth into an array and taking 2nd item
     const token = authHeader && authHeader.split(' ')[1]    
@@ -92,15 +93,18 @@ const authenticateToken = (req, res, next)=>{
     } else {
             //Might have to promisify this, because need to call next()
             //when it's done.
+            console.log("Verifying token now.")
         jwt.verify(token, ACCESS_SECRET, (err, user)=>{
             if(err){
                 console.log('Error trying to verify an access token. JWT may be broken.')
                 return next()                
             } else {                
                 const foundToken = tokenContainer.find(item=>item.accessToken === token)
-                
+                console.log("Token verified. Now searching for it.")
                 if(foundToken){
+                    console.log("Found the token.", foundToken)
                     if(addRobot){
+                        console.log("It was an addrobot request")
                         User.findOne({username},
                             async (err, userData)=>{
                                 if(err){
@@ -129,7 +133,10 @@ const authenticateToken = (req, res, next)=>{
                     }
                 }
     
-                // console.log(`After trying to verify jwt for ${req.body.username}, validated is:${req.validated}`)
+                if(!foundToken){
+                    console.log("Could not find the token. Asking user to send refresh token.")
+                    return res.status(401).json({success: false, message: "Access token expired. Send refresh token or log in with password."})
+                }
             }
         })
     }
@@ -204,6 +211,10 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
     if(!req.body.username){
         console.log("We got in !req.body.username")
         return res.status(400).json({success: false, message: 'Failed to log in. Please provide a username.'})
+    }
+
+    if(!req.token && !req.body.password){
+        return res.status(400).json({success: false, message: 'Please provide a password to log in.'})
     }
 
     User.findOne({username:req.body.username},

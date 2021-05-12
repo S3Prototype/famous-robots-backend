@@ -1,4 +1,5 @@
 5/12/2021
+- Gotta remove the "success" I've been adding to every response. Not necessary. Can check the status on the frontend.
 - Right now, in order to authenticate the admin account for adding new robots, data must be sent through headers. In order to work around this, I have a plan:
     1. On the client side, we'll send 2 requests instead of 1 whenever an admin tries to add a robot.
     2. First request simply authenticates with username and auth token or password.
