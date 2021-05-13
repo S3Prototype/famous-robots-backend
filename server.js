@@ -9,6 +9,11 @@ const jwt = require('jsonwebtoken')
 const multer = require('multer')
 const randomString = require('random-string')
 const cloudinary = require('cloudinary').v2
+cloudinary.config({
+    cloud_name: 'diujqlncs',
+    api_key: '555645569158384',
+    api_secret: '9PBW0Z2sRGRK8T_Cr5ezRLJjNRs',
+})
 const ObjectID = require('mongodb').ObjectID;
 const validator = require('node-email-validation')
 const robot = require('./schemas/robot')
@@ -66,8 +71,8 @@ mongoose.connect(
 
 app.use(cors())
 app.use('/robots/images', express.static('robotImages'))
-app.use(express.json())
-app.use(express.urlencoded({extended:true}))
+app.use(express.json({limit: '50mb'}))
+app.use(express.urlencoded({limit:'50mb', extended:true}))
 
 const generateID = ()=>{
     return randomString({length:17})+new Date().getMilliseconds()
@@ -85,7 +90,7 @@ const authenticateToken = (req, res, next)=>{
     const authHeader = req.headers['authorization']
     const addRobot =  req.headers['addrobot']
     const emailHeader = req.headers['email']
-    console.log("The body is", req.body)
+    // console.log("The body is", req.body)
 
         //Get the token by splitting auth into an array and taking 2nd item
     const token = authHeader && authHeader.split(' ')[1]    
@@ -146,7 +151,7 @@ const authenticateToken = (req, res, next)=>{
 }
 
 app.get('/robots/all', authenticateToken, async (req, res, next)=>{
-    if(!req.validated){
+    if(!req.validated || !req.token){
         console.log(`A user tried to get all the robots but was not validated. Validation:  ${req.validated}`)
         return res.status(401).json({message: `You must be authorized to access the robots list.`})
     }
@@ -207,13 +212,13 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
                         //*
 
                             //Now update the user data/voted for ID's
-                        const newVotedForAlready = userData.votedForIDs
-                        newVotedForAlready.push(updatedRobot._id)
+                        const newUserVotedForIDs = userData.votedForIDs
+                        newUserVotedForIDs.push(updatedRobot._id)
                         await userData.updateOne({votedForIDs:newUserVotedForIDs})
 
                         const robotSet = await Robot.find()
 
-                        return res.status(200).json({message: `${userData.email} successfully voted for ${updatedRobot.name}`, robotSet, votedForAlready: newVotedForAlready})
+                        return res.status(200).json({message: `${userData.email} successfully voted for ${updatedRobot.name}`, robotSet, votedForIDs: newUserVotedForIDs})
                     } catch (err){
                         console.log(`Error adding a vote to ${req.body.robot.name}:`, err)
                         return res.status(500).json({message: `Server error. Please try again later.`})
@@ -231,41 +236,54 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
     })
 })
 
-app.post('/robots/addrobot', authenticateToken, upload.single("robotImage"), (req, res, next)=>{
-    // Have to check if they even sent an image. If not, return with error.
-    if(!req.isAdmin || !req.validated)
-        return res.status(401).json({message: `Please log in as an admin to add a robot.`})
+app.post('/robots/addrobot', authenticateToken, /*upload.single("robotImage"),*/ (req, res, next)=>{
 
-    if(!req.file || !req.file.path)
+    // Have to check if they even sent an image. If not, return with error.
+    // if(!req.isAdmin || !req.validated)
+    //     return res.status(401).json({message: `Please log in as an admin to add a robot.`})
+
+    if(!req.body.data){
+        console.log("You didn't send afile in req.body.data")
         return res.status(400).json({message: `Please add an image for your robot.`})
-    
+    }
+
     Robot.findOne({name:req.body.name},
         async (err, robotData)=>{
-            if(err)
+            if(err){
+                console.log("Error when searching for robot in the db", req.body.name)
                 return res.status(502).json({message: `Possible database error. Your robot was not saved. Please try again. ${err}`})
-
-                //If this robot already exists, can't add it.
-            if(robotData)
-                return res.status(400).json({message: `Could not create robot. "${req.body.name}" already exists!`})
-            
-            const newRobotData = {
-                name: req.body.name,
-                image: `http://localhost:3100/robots/images/${req.file.originalname}`,
-                _id: new ObjectID(),
-                votes: 0,
             }
-            const newRobot = new Robot(newRobotData)
-            newRobot.isNew = true
+                //If this robot already exists, can't add it.
+            if(robotData){
+                console.log("Robot already existed", req.body.name, req.body.data.slice(0, 20))
+                return res.status(400).json({message: `Could not create robot. "${req.body.name}" already exists!`})
+            }
             try{
-                if(await newRobot.save())
+                console.log("We're now adding the image to cloudinary.")
+                const robotImage =
+                    await cloudinary.uploader.upload(req.body.data, {upload_preset:'mondofamousrobots'})
+
+                const newRobotData = {
+                    name: req.body.name,
+                    image: robotImage.url,
+                    _id: new ObjectID(),
+                    votes: 0,
+                }
+
+                const newRobot = new Robot(newRobotData)
+                newRobot.isNew = true
+                if(await newRobot.save()){
+                    console.log('Weve created the robot in the database. Now were sending it back.')
+                    const robotSet = await Robot.find()
+                    console.log("Now we're sending back the robotset", robotSet)
                     return res.status(201).json({
-                        success: true,
                         message: `${newRobotData.name} successfully created.`,
-                        newRobotData,
+                        robotSet,
                     })
-                else throw new Error(`Failed to save robot ${name} to database. Possible MongoDB error.`)
+                }
+                else throw new Error(`Failed to save robot ${req.body.name} to database. Possible MongoDB error.`)
             } catch(err){
-                console.log(err)
+                console.log(`Failed to save robot: ${err}`)
                 return res.status(500).json({message: `Could not create ${name}. Server error. ${err}`})
             }
         }
@@ -331,7 +349,6 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
                     return res.status(200).json({
                         userData: sendData,
                         message: `Successfully logged in ${email}`,
-                        success: true,
                     })
                 }
                 
@@ -343,7 +360,7 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
                             
                             if(!passwordIsCorrect){
                                 console.log("Incorrect password")
-                                return res.status(401).json({success: false, message: 'Incorrect email or password.'})
+                                return res.status(401).json({message: 'Incorrect email or password.'})
                             }
                         }
 
@@ -359,18 +376,17 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
                             name: email
                         })
                     } catch (err) {
-                        return res.status(502).json({success: false, message: `Authorization error. Your email and password may be correct, but we could not validate you at this time. ${err}`})
+                        return res.status(502).json({message: `Authorization error. Your email and password may be correct, but we could not validate you at this time. ${err}`})
                     }  
                     
                     return res.status(200).json({
                         userData: sendData,
                         message: `Successfully logged in ${email} and generated auth tokens.`,
-                        success: true,
                     }) 
                 }
 
             } else {                
-                return res.status(401).json({success: false, message: `Failed to login. email or password incorrect.`})
+                return res.status(401).json({message: `Failed to login. email or password incorrect.`})
             }
         }
     )
