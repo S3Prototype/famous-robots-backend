@@ -208,10 +208,11 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
 
     res.set({'Content-Type': 'application/json'})
 
-    if(!req.body.email || !validator.is_email_valid(req.body.email)){
-        console.log("We got in !req.body.email")
-        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
-    }
+    if(!req.body.email)
+        if(!req.body.email === 'Admin' || !validator.is_email_valid(req.body.email)){
+            console.log("We got in !req.body.email")
+            return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
+        }
 
     if(!req.token && !req.body.password){
         return res.status(400).json({success: false, message: 'Please provide a password to log in.'})
@@ -225,10 +226,11 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
             }
 
             if(userData){    
-                const {email, password, isAdmin, seen} = userData
+                const {email, password, isAdmin, seen, name} = userData
                 console.log("Found user", userData)
 
                 const sendData = {
+                    name,
                     email,
                     isAdmin,
                     seen,
@@ -298,6 +300,7 @@ app.post('/users/register', async (req, res)=>{
             }
             if(!userData){
                 const newUserData = {
+                    name: req.body.name,
                     _id: new ObjectID(),
                     email: req.body.email,
                     isAdmin: false,

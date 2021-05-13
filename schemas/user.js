@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 
 const user = new mongoose.Schema({
+    name: String,
     email: String,
     password: String,
     seen: Array, //robots the user has seen already
