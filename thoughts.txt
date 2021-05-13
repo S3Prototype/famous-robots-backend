@@ -1,3 +1,6 @@
+5/13/21
+- Should research if there's a callback for JWT's when they expire. If so, use that to remove them from the token array
+
 5/12/2021
 - For some reason the JWT keeps generating the same token for every new user login.
 - Gotta remove the "success" I've been adding to every response. Not necessary. Can check the status on the frontend.

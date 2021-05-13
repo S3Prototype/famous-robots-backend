@@ -11,6 +11,7 @@ const randomString = require('random-string')
 const cloudinary = require('cloudinary').v2
 const ObjectID = require('mongodb').ObjectID;
 const validator = require('node-email-validation')
+const robot = require('./schemas/robot')
 
 const REFRESH_SECRET = 'littlesecret000'
 const ACCESS_SECRET = 'bigsecret100'
@@ -76,13 +77,14 @@ const authenticateToken = (req, res, next)=>{
     // Redo all this. Just check and validate the token.
     // If the token is validated, set a req.validated = true.
     // Otherwise, req.validated = false.
+    res.set({'Content-Type':'application/json'})
 
     req.validated = false
     req.isAdmin = false
 
     const authHeader = req.headers['authorization']
     const addRobot =  req.headers['addrobot']
-    const email = req.headers['email']
+    const emailHeader = req.headers['email']
     console.log("The body is", req.body)
 
         //Get the token by splitting auth into an array and taking 2nd item
@@ -105,7 +107,7 @@ const authenticateToken = (req, res, next)=>{
                     console.log("Found the token.", foundToken)
                     if(addRobot){
                         console.log("It was an addrobot request")
-                        User.findOne({email},
+                        User.findOne({email: emailHeader},
                             async (err, userData)=>{
                                 if(err){
                                     console.log("Error trying to find admin in database for adding robots", err)
@@ -143,7 +145,93 @@ const authenticateToken = (req, res, next)=>{
 
 }
 
-app.post('/api/addrobot', authenticateToken, upload.single("robotImage"), (req, res, next)=>{
+app.get('/robots/all', authenticateToken, async (req, res, next)=>{
+    if(!req.validated){
+        console.log(`A user tried to get all the robots but was not validated. Validation:  ${req.validated}`)
+        return res.status(401).json({message: `You must be authorized to access the robots list.`})
+    }
+
+    try {
+        const robots = await Robot.find()
+        return res.status(200).send({message: `You are authorized to access the robots list.`, robots})
+    } catch (err) {
+        console.log(`Could not get robot list from database.`)
+        return res.status(502).json({message: `Could not get robots. Possible database error.`})
+    }
+})
+
+    //? consider using PUT here
+app.post('/robots/vote', authenticateToken, (req, res, next)=>{
+    // *Request expects robot list back
+
+    if(!req.validated){
+        console.log(`${req.body.username} tried to vote for ${req.body.robot._id} but wasn't validated. Validation was: ${req.validated}`)
+        return res.status(401).json({message: `You must be logged in to vote.`})
+    }
+
+    if(!req.body.username){
+        console.log(`No username sent when trying to vote for ${req.body.robot._id}`)
+        return res.status(400).json({message: `You must be logged in to vote.`})
+    }
+    
+    if(!req.body.robot){
+        console.log(`No robot specified when ${req.body.username} tried to vote.`)
+        return res.status(400).json({message: `At this time you are unable to vote for that robot..`})
+    }
+
+    User.findOne({username:req.body.username}, async (err, userData)=>{
+        if(err){
+            console.log(`Error while trying to find user in database: ${req.body.username}`, err)
+            return res.status(401).json({message: `User not found. Please log in again.`})
+        }
+
+        if(userData){
+            Robot.findOne({_id: req.body.robot._id}, async (err, robotData)=>{
+                if(err){
+                    console.log(`Error while seeking robot ${req.body.robot.name} in database.`,)
+                    return res.status(502).json({message: `Robot not found. Possible database error.`})            
+                }
+
+                if(robotData){
+                    try{
+                        console.log(`Vote count for ${robotData.name} before update:`, robotData.votes)
+                        const incrementedVotes = robotData.votes + 1
+    
+                        await robotData.updateOne({votes: incrementedVotes})
+
+                        //*
+                            //Now get back the updated robot, just for console.log purposes
+                            const updatedRobot = await Robot.findOne({_id: robotData._id})
+                            console.log(`Vote count for ${updatedRobot.name} after update:`, updatedRobot.votes)
+                            console.log(`${userData.email} has successfully voted for ${updatedRobot.name}!`)
+                        //*
+
+                            //Now update the user data/voted for ID's
+                        const newVotedForAlready = userData.votedForIDs
+                        newVotedForAlready.push(updatedRobot._id)
+                        await userData.updateOne({votedForIDs:newUserVotedForIDs})
+
+                        const robotSet = await Robot.find()
+
+                        return res.status(200).json({message: `${userData.email} successfully voted for ${updatedRobot.name}`, robotSet, votedForAlready: newVotedForAlready})
+                    } catch (err){
+                        console.log(`Error adding a vote to ${req.body.robot.name}:`, err)
+                        return res.status(500).json({message: `Server error. Please try again later.`})
+                    }
+
+                } else {
+                    console.log(`Couldn't find robot ${req.body.robot.name} in database, but no errors.`)
+                    return res.status(502).json({message: `Robot not found. Possible database error.`})            
+                }
+            })
+        } else {
+            console.log(`Failed to find user in database, but had no errors either: ${req.body.username}`)
+            return res.status(401).json({message: `User not found. Please log in again.`})
+        }
+    })
+})
+
+app.post('/robots/addrobot', authenticateToken, upload.single("robotImage"), (req, res, next)=>{
     // Have to check if they even sent an image. If not, return with error.
     if(!req.isAdmin || !req.validated)
         return res.status(401).json({message: `Please log in as an admin to add a robot.`})
@@ -206,11 +294,12 @@ app.post('/token', (req, res)=>{
 
 app.post('/users/login', authenticateToken, (req, res, next)=>{
 
-    res.set({'Content-Type': 'application/json'})
 
+        //If they don't have an email, reject them, unless they're admin.
     if(!req.body.email)
-        if(!req.body.email === 'Admin' || !validator.is_email_valid(req.body.email)){
-            console.log("We got in !req.body.email")
+        if(!req.isAdmin || !validator.is_email_valid(req.body.email)){
+            //If they're not an admin, or their email is invalid
+            console.log("We got in !req.body.isAdmin")
             return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
         }
 
@@ -226,14 +315,14 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
             }
 
             if(userData){    
-                const {email, password, isAdmin, seen, name} = userData
+                const {email, password, isAdmin, votedForIDs, name} = userData
                 console.log("Found user", userData)
 
                 const sendData = {
                     name,
                     email,
                     isAdmin,
-                    seen,
+                    votedForIDs: votedForIDs || [],
                     loggedIn: true,
                 }
 
