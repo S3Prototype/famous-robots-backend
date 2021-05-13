@@ -10,7 +10,7 @@ const multer = require('multer')
 const randomString = require('random-string')
 const cloudinary = require('cloudinary').v2
 const ObjectID = require('mongodb').ObjectID;
-
+const validator = require('node-email-validation')
 
 const REFRESH_SECRET = 'littlesecret000'
 const ACCESS_SECRET = 'bigsecret100'
@@ -82,7 +82,7 @@ const authenticateToken = (req, res, next)=>{
 
     const authHeader = req.headers['authorization']
     const addRobot =  req.headers['addrobot']
-    const username = req.headers['username']
+    const email = req.headers['email']
     console.log("The body is", req.body)
 
         //Get the token by splitting auth into an array and taking 2nd item
@@ -105,11 +105,11 @@ const authenticateToken = (req, res, next)=>{
                     console.log("Found the token.", foundToken)
                     if(addRobot){
                         console.log("It was an addrobot request")
-                        User.findOne({username},
+                        User.findOne({email},
                             async (err, userData)=>{
                                 if(err){
                                     console.log("Error trying to find admin in database for adding robots", err)
-                                    return res.status(502).json({success: false, message: `Failed to login ${req.body.username}. Possible database rror. Please try again.`})            
+                                    return res.status(502).json({success: false, message: `Failed to login ${req.body.email}. Possible database rror. Please try again.`})            
                                 }
 
                                 if(userData && userData.isAdmin){
@@ -198,7 +198,7 @@ app.post('/token', (req, res)=>{
     jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, user)=>{
         if(err) return res.sendStatus(403)
 
-        const accessToken = jwt.sign({name:req.body.username},  process.env.ACCESS_SECRET, {expiresIn: '30s'})
+        const accessToken = jwt.sign({name:req.body.email},  process.env.ACCESS_SECRET, {expiresIn: '30s'})
 
         res.json({accessToken})
     })
@@ -208,37 +208,38 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
 
     res.set({'Content-Type': 'application/json'})
 
-    if(!req.body.username){
-        console.log("We got in !req.body.username")
-        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a username.'})
+    if(!req.body.email || !validator.is_email_valid(req.body.email)){
+        console.log("We got in !req.body.email")
+        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
     }
 
     if(!req.token && !req.body.password){
         return res.status(400).json({success: false, message: 'Please provide a password to log in.'})
     }
 
-    User.findOne({username:req.body.username},
+    User.findOne({email:req.body.email},
         async (err, userData)=>{
             if(err){
                 console.log("Found an error looking in database", err)
-                return res.status(502).json({success: false, message: `Failed to login ${req.body.username}. Possible database rror. Please try again.`})            
+                return res.status(502).json({success: false, message: `Failed to login ${req.body.email}. Possible database rror. Please try again.`})            
             }
 
             if(userData){    
-                const {username, password, isAdmin, seen} = userData
+                const {email, password, isAdmin, seen} = userData
                 console.log("Found user", userData)
 
                 const sendData = {
-                    username,
+                    email,
                     isAdmin,
                     seen,
+                    loggedIn: true,
                 }
 
                 if(req.validated){
                     console.log("We entered req.validated")
                     return res.status(200).json({
-                        sendData,
-                        message: `Successfully logged in ${username}`,
+                        userData: sendData,
+                        message: `Successfully logged in ${email}`,
                         success: true,
                     })
                 }
@@ -251,34 +252,34 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
                             
                             if(!passwordIsCorrect){
                                 console.log("Incorrect password")
-                                return res.status(401).json({success: false, message: 'Incorrect username or password.'})
+                                return res.status(401).json({success: false, message: 'Incorrect email or password.'})
                             }
                         }
 
                         console.log("Got past await bcrypt")
 
-                        sendData.accessToken = jwt.sign({username}, ACCESS_SECRET, {expiresIn: '12h'})
+                        sendData.accessToken = jwt.sign({email}, ACCESS_SECRET, {expiresIn: '12h'})
 
-                        sendData.refreshToken = jwt.sign({username}, REFRESH_SECRET)
+                        sendData.refreshToken = jwt.sign({email}, REFRESH_SECRET)
 
                         console.log('JWT generated:', sendData.accessToken)
                         tokenContainer.push({
                             accessToken: sendData.accessToken, 
-                            name: username
+                            name: email
                         })
                     } catch (err) {
-                        return res.status(502).json({success: false, message: `Authorization error. Your username and password may be correct, but we could not validate you at this time. ${err}`})
+                        return res.status(502).json({success: false, message: `Authorization error. Your email and password may be correct, but we could not validate you at this time. ${err}`})
                     }  
                     
                     return res.status(200).json({
                         userData: sendData,
-                        message: `Successfully logged in ${username} and generated auth tokens.`,
+                        message: `Successfully logged in ${email} and generated auth tokens.`,
                         success: true,
                     }) 
                 }
 
             } else {                
-                return res.status(401).json({success: false, message: `Failed to login. Username or password incorrect.`})
+                return res.status(401).json({success: false, message: `Failed to login. email or password incorrect.`})
             }
         }
     )
@@ -286,19 +287,19 @@ app.post('/users/login', authenticateToken, (req, res, next)=>{
 
 app.post('/users/register', async (req, res)=>{
     
-    if(!req.body.username || !req.body.password)
-        return res.status(400).send({info: 'Failed to register. Please provide a username and password.'})
+    if(!req.body.email || !validator.is_email_valid(req.body.email) || !req.body.password)
+        return res.status(400).send({info: 'Failed to register. Please provide an email and password.'})
 
-    User.findOne({username:req.body.username},
+    User.findOne({email:req.body.email},
         async (err, userData)=>{
             if(err){
                 console.log("Found an error trying to register user in database", err)
-                return res.status(502).json({success: false, message: `Failed to register ${req.body.username}. Possible database rror. Please try again.`})          
+                return res.status(502).json({success: false, message: `Failed to register ${req.body.email}. Possible database rror. Please try again.`})          
             }
             if(!userData){
                 const newUserData = {
                     _id: new ObjectID(),
-                    username: req.body.username,
+                    email: req.body.email,
                     isAdmin: false,
                 }
                 try{
@@ -310,15 +311,15 @@ app.post('/users/register', async (req, res)=>{
                         //From here user should be redirected to login page
                     return res.status(200).json({
                         _id: newUserData._id,
-                        message: `User ${newUserData.username} created`,
-                        username: newUserData.username
+                        message: `User ${newUserData.email} created`,
+                        email: newUserData.email
                     })
                 } catch(err){
                     console.log("Failed to save user", err)
-                    return res.status(502).json({success: false, message: `Failed to create ${newUserData.username}.`})
+                    return res.status(502).json({success: false, message: `Failed to create ${newUserData.email}.`})
                 }                
             } else {
-                return res.status(400).json({success: false, message: `User ${req.body.username} already exists`})
+                return res.status(400).json({success: false, message: `User ${req.body.email} already exists`})
             }                        
         }
     )
@@ -326,15 +327,15 @@ app.post('/users/register', async (req, res)=>{
 
 app.post('/users/logout', async (req, res)=>{
     try{
-        tokenContainer = tokenContainer.filter(token=>token.accessToken !== req.body.accessToken && token.username !== req.body.username)
+        tokenContainer = tokenContainer.filter(token=>token.accessToken !== req.body.accessToken && token.email !== req.body.email)
     } catch(err){
-        return res.send({info: `Failed to logout user ${req.body.username}, ${err}`})
+        return res.send({info: `Failed to logout user ${req.body.email}, ${err}`})
     }
 
-    return res.send({info: `Successfully logged out ${req.body.username}`})
+    return res.send({info: `Successfully logged out ${req.body.email}`})
 })
 
-app.get('/users/:username/', authenticateToken, (req, res)=>{
+app.get('/users/:email/', authenticateToken, (req, res)=>{
 })
 
 app.get('/', function (req, res) {
