@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs')
 const User = require('./schemas/user')
 const Robot = require('./schemas/robot')
 const jwt = require('jsonwebtoken')
-const multer = require('multer')
+// const multer = require('multer')
 const randomString = require('random-string')
 const cloudinary = require('cloudinary').v2
 cloudinary.config({
@@ -21,35 +21,35 @@ const robot = require('./schemas/robot')
 const REFRESH_SECRET = 'littlesecret000'
 const ACCESS_SECRET = 'bigsecret100'
 
-const storage = multer.diskStorage({
-    destination: function(req, file, cb){
-        cb(null, './robotImages/')
-    },
-    filename: function(req, file, cb){
-        cb(null, file.originalname)
-    }  
-})
+// const storage = multer.diskStorage({
+//     destination: function(req, file, cb){
+//         cb(null, './robotImages/')
+//     },
+//     filename: function(req, file, cb){
+//         cb(null, file.originalname)
+//     }  
+// })
 
-const fileFilter = (req, file, cb)=>{
-    if(!req.validated || !req.isAdmin){
-        return cb(null, false) 
-    }
-    switch(file.mimetype){
-        case 'image/jpeg':
-        case 'image/gif':
-        case 'image/png':
-            cb(null, true)
-        break;            
-        default:
-            cb(null, false)        
-    }
-}
+// const fileFilter = (req, file, cb)=>{
+//     if(!req.validated || !req.isAdmin){
+//         return cb(null, false) 
+//     }
+//     switch(file.mimetype){
+//         case 'image/jpeg':
+//         case 'image/gif':
+//         case 'image/png':
+//             cb(null, true)
+//         break;            
+//         default:
+//             cb(null, false)        
+//     }
+// }
 
-const upload = multer({
-    storage,
-    limits: {fileSize: 1024*1024*5},//5mb
-    fileFilter
-})
+// const upload = multer({
+//     storage,
+//     limits: {fileSize: 1024*1024*5},//5mb
+//     fileFilter
+// })
 
 // const store = new session.MemoryStore()
 
@@ -170,23 +170,23 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
     // *Request expects robot list back
 
     if(!req.validated){
-        console.log(`${req.body.username} tried to vote for ${req.body.robot._id} but wasn't validated. Validation was: ${req.validated}`)
+        console.log(`${req.body.email} tried to vote for ${req.body.robot._id} but wasn't validated. Validation was: ${req.validated}`)
         return res.status(401).json({message: `You must be logged in to vote.`})
     }
 
-    if(!req.body.username){
-        console.log(`No username sent when trying to vote for ${req.body.robot._id}`)
+    if(!req.body.email){
+        console.log(`No email sent when trying to vote for ${req.body.robot._id}`)
         return res.status(400).json({message: `You must be logged in to vote.`})
     }
     
     if(!req.body.robot){
-        console.log(`No robot specified when ${req.body.username} tried to vote.`)
+        console.log(`No robot specified when ${req.body.email} tried to vote.`)
         return res.status(400).json({message: `At this time you are unable to vote for that robot..`})
     }
 
-    User.findOne({username:req.body.username}, async (err, userData)=>{
+    User.findOne({email:req.body.email}, async (err, userData)=>{
         if(err){
-            console.log(`Error while trying to find user in database: ${req.body.username}`, err)
+            console.log(`Error while trying to find user in database: ${req.body.email}`, err)
             return res.status(401).json({message: `User not found. Please log in again.`})
         }
 
@@ -211,6 +211,8 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
                             console.log(`${userData.email} has successfully voted for ${updatedRobot.name}!`)
                         //*
 
+                        console.log("The user's voted ID's before update.", userData.votedForIDs)
+
                             //Now update the user data/voted for ID's
                         const newUserVotedForIDs = userData.votedForIDs
                         newUserVotedForIDs.push(updatedRobot._id)
@@ -218,6 +220,7 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
 
                         const robotSet = await Robot.find()
 
+                        console.log("The user's voted ID's after update", newUserVotedForIDs)
                         return res.status(200).json({message: `${userData.email} successfully voted for ${updatedRobot.name}`, robotSet, votedForIDs: newUserVotedForIDs})
                     } catch (err){
                         console.log(`Error adding a vote to ${req.body.robot.name}:`, err)
@@ -230,20 +233,43 @@ app.post('/robots/vote', authenticateToken, (req, res, next)=>{
                 }
             })
         } else {
-            console.log(`Failed to find user in database, but had no errors either: ${req.body.username}`)
+            console.log(`Failed to find user in database, but had no errors either: ${req.body.email}`)
             return res.status(401).json({message: `User not found. Please log in again.`})
         }
     })
 })
 
-app.post('/robots/addrobot', authenticateToken, /*upload.single("robotImage"),*/ (req, res, next)=>{
+app.post('/robots/delete', (req, res, next)=>{
+    console.log('Delete request is:',req.body)
+    if(!req.body.robot){
+        console.log("You didn't send a robot to delete")
+        return res.status(400).json({message: `Please select the robot you wish to delete.`})
+    }
+
+    Robot.deleteOne({_id:req.body.robot._id})
+    .then(async _=>{
+        console.log(`Successfully deleted ${req.body.robot.name}`)
+        const robotSet = await Robot.find()
+
+        return res.status(200).json({
+            robotSet,    
+            message: `Successfully deleted ${req.body.robot.name}`
+        })
+    })
+    .catch(err=>{
+        console.log(`Failed to delete ${req.body.robot.name}`, err)
+        return res.status(500).json({message: `Failed to delete ${req.body.robot.name} - ${err.message}`})    
+    })
+})
+
+app.post('/robots/addrobot', /*authenticateToken,*/ /*upload.single("robotImage"),*/ (req, res, next)=>{
 
     // Have to check if they even sent an image. If not, return with error.
     // if(!req.isAdmin || !req.validated)
     //     return res.status(401).json({message: `Please log in as an admin to add a robot.`})
 
     if(!req.body.data){
-        console.log("You didn't send afile in req.body.data")
+        console.log("You didn't send a file in req.body.data")
         return res.status(400).json({message: `Please add an image for your robot.`})
     }
 
@@ -288,6 +314,51 @@ app.post('/robots/addrobot', authenticateToken, /*upload.single("robotImage"),*/
             }
         }
     )
+})
+
+app.post('/robots/edit', (req, res, next)=>{
+
+    // Have to check if they even sent an image. If not, return with error.
+    // if(!req.isAdmin || !req.validated)
+    //     return res.status(401).json({message: `Please log in as an admin to add a robot.`})
+
+    // Update watever they've added.
+    if(!req.body.original || !req.body.new)
+        return res.status(400).json({message: `Error. The client did not send enough information about the robot to edit it.`})
+
+    Robot.findOne({_id:req.body.original._id}, async (err, robot)=>{
+        if(err)
+            return res.status(502).json({message: `DB error`})
+        
+        if(!robot)
+            return res.status(400).json({message: `Could not find robot ${req.body.original.name} to edit`})
+
+        try{
+            const oldRobot = req.body.original
+            const newRobot = req.body.new
+
+            if(newRobot.imageData){
+                const rawImage = await cloudinary.uploader.upload(newRobot.imageData, {upload_preset:'mondofamousrobots'})
+                newRobot.image = rawImage.url
+            }
+
+            await robot.updateOne({                
+                name: newRobot.name,
+                image: newRobot.image || oldRobot.image
+            })
+
+            const robotSet = await Robot.find()
+
+            res.status(201).json({
+                message: `Successfully changed robot ${newRobot.name}!`,
+                robotSet
+            })
+
+        } catch (err){
+            console.log(`Error trying to edit robot ${req.body.original.name}.`, err)
+            return res.status(500).json({message: `Error trying to edit ${req.body.original.name}, ${err.message}`})
+        }
+    })
 })
 
 let tokenContainer = []
