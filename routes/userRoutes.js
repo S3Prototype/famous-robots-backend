@@ -111,7 +111,8 @@ router.post('/register', async (req, res)=>{
                     await newUser.save()
 
                     return res.status(200).json({
-                        _id: newUserData._id,
+                        userData: newUserData,
+                        robotSet: robotSet.reverse(),
                         message: `User ${newUserData.email} created`,
                         email: newUserData.email
                     })
