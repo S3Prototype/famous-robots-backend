@@ -517,8 +517,15 @@ app.post('/users/logout', async (req, res)=>{
 app.get('/users/:email/', authenticateToken, (req, res)=>{
 })
 
-app.get('/', function (req, res) {
-    res.send(`Famous Robots Backend`)
+app.get('/', async (req, res)=>{
+    const robotList = await Robot.find()
+    const robotNames = robotList.map(robot=>robot.name)
+    res.send(`Famous Robots Backend by Shaquil Hansford.
+            \n
+            Current Robots:<br/> ${robotList.map(bot=>`<br />${bot.name}<br /><img style='max-width:200px' src='${bot.image}'/><br />`)} \n
+            \n
+            <h1 style='margin-bottom:200px'>Frontend coming soon!</h1>
+    `)
 }) 
 
 var port = process.env.PORT || '3100';
