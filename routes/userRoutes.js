@@ -4,6 +4,7 @@ const ObjectID = require('mongodb').ObjectID;
 const validator = require('node-email-validation')
 const bcrypt = require('bcryptjs')
 const User = require('../schemas/user')
+const Robot = require('../schemas/robot')
 const jwt = require('jsonwebtoken')
 const {authenticateToken, tokenContainer} = require('../utils/authHandler')
 const { DEFAULT_ACCESS_SECRET, DEFAULT_REFRESH_SECRET } = require('../utils/backupSecrets')
@@ -26,6 +27,8 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                 return res.status(502).json({success: false, message: `Failed to login ${req.body.email}. Possible database rror. Please try again.`})            
             }
 
+            const robotSet = await Robot.find()
+
             if(userData){    
                 const {email, password, isAdmin, votedForIDs, name} = userData
 
@@ -39,6 +42,7 @@ router.post('/login', authenticateToken, (req, res, next)=>{
 
                 if(req.validated){
                     return res.status(200).json({
+                        robotSet: robotSet.reverse(),
                         userData: sendData,
                         message: `Successfully logged in ${email}`,
                     })
@@ -50,7 +54,6 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                             const passwordIsCorrect = await bcrypt.compare(req.body.password, password)
                             
                             if(!passwordIsCorrect){
-                                ("Incorrect password")
                                 return res.status(401).json({message: 'Incorrect email or password.'})
                             }
                         }
@@ -69,6 +72,7 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                     }  
                     
                     return res.status(200).json({
+                        robotSet: robotSet.reverse(),
                         userData: sendData,
                         message: `Successfully logged in ${email} and generated auth tokens.`,
                     }) 
@@ -92,6 +96,7 @@ router.post('/register', async (req, res)=>{
                 return res.status(502).json({success: false, message: `Failed to register ${req.body.email}. Possible database rror. Please try again.`})          
             }
             if(!userData){
+                const robotSet = await Robot.find()
                 const newUserData = {
                     name: req.body.name,
                     _id: new ObjectID(),
