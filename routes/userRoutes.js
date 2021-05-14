@@ -102,6 +102,7 @@ router.post('/register', async (req, res)=>{
                     _id: new ObjectID(),
                     email: req.body.email,
                     isAdmin: false,
+                    loggedIn: true,
                 }
                 try{
 
@@ -114,7 +115,6 @@ router.post('/register', async (req, res)=>{
                         userData: newUserData,
                         robotSet: robotSet.reverse(),
                         message: `User ${newUserData.email} created`,
-                        email: newUserData.email
                     })
                 } catch(err){
                     return res.status(502).json({success: false, message: `Failed to create ${newUserData.email}.`})
