@@ -11,11 +11,14 @@ const { DEFAULT_ACCESS_SECRET, DEFAULT_REFRESH_SECRET } = require('../utils/back
 
 router.post('/login', authenticateToken, (req, res, next)=>{
         //If they don't have an email, reject them, unless they're admin.
-    if(!req.body.email)
-        if(!req.isAdmin || !validator.is_email_valid(req.body.email)){
-            //If they're not an admin, or their email is invalid
-            return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
-        }
+    if(!req.body.email){
+        //If they're not an admin, or their email is invalid
+        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
+    }
+
+    if(req.body.email !== 'Admin' && !validator.is_email_valid(req.body.email)){
+        return res.status(400).json({success: false, message: 'Failed to log in. Please provide a valid email.'})
+    }
 
     if(!req.token && !req.body.password){
         return res.status(400).json({success: false, message: 'Please provide a password to log in.'})
@@ -30,10 +33,9 @@ router.post('/login', authenticateToken, (req, res, next)=>{
             const robotSet = await Robot.find()
 
             if(userData){    
-                const {email, password, isAdmin, votedForIDs, name} = userData
+                const {email, password, isAdmin, votedForIDs} = userData
 
                 const sendData = {
-                    name,
                     email,
                     isAdmin,
                     votedForIDs: votedForIDs || [],
@@ -41,13 +43,14 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                 }
 
                 if(req.validated){
+                    sendData.accessToken = req.token
                     return res.status(200).json({
                         robotSet: robotSet.reverse(),
                         userData: sendData,
                         message: `Successfully logged in ${email}`,
                     })
                 }
-                
+
                 if(req.body.password){
                     try{
                         if(!isAdmin){
@@ -58,9 +61,10 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                             }
                         }
 
+                        if(isAdmin && req.body.password !== userData.password)
+                            return res.status(401).json({message: 'Incorrect email or password.'})
 
                         sendData.accessToken = jwt.sign({email}, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, {expiresIn: '24h'})
-
                         sendData.refreshToken = jwt.sign({email}, process.env.REFRESH_SECRET || DEFAULT_REFRESH_SECRET)
 
                         tokenContainer.push({
@@ -77,7 +81,6 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                         message: `Successfully logged in ${email} and generated auth tokens.`,
                     }) 
                 }
-
             }               
             
             return res.status(401).json({message: `Failed to login. email or password incorrect.`})            
