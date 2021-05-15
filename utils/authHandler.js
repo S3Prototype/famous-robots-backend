@@ -3,7 +3,7 @@ const User = require('../schemas/user')
 const { DEFAULT_ACCESS_SECRET } = require('./backupSecrets')
 
 let tokenContainer = []
-const authenticateToken = (req, res, next)=>{
+const authenticateToken = async (req, res, next)=>{
     // Redo all this. Just check and validate the token.
     // If the token is validated, set a req.validated = true.
     // Otherwise, req.validated = false.
