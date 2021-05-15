@@ -78,9 +78,9 @@ router.post('/login', authenticateToken, (req, res, next)=>{
                     }) 
                 }
 
-            } else {                
-                return res.status(401).json({message: `Failed to login. email or password incorrect.`})
-            }
+            }               
+            
+            return res.status(401).json({message: `Failed to login. email or password incorrect.`})            
         }
     )
 })

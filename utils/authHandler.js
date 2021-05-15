@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken')
+const User = require('../schemas/user')
 const { DEFAULT_ACCESS_SECRET } = require('./backupSecrets')
-
 
 let tokenContainer = []
 const authenticateToken = (req, res, next)=>{
@@ -9,8 +9,17 @@ const authenticateToken = (req, res, next)=>{
     // Otherwise, req.validated = false.
     res.set({'Content-Type':'application/json'})
 
-    req.validated = false
+    if(!req.body.email)
+        return res.status(400).json({message:'Email address not valid.'})
+
     req.isAdmin = false
+    req.validated = false
+
+    if(req.body.email === 'Admin'){
+        const adminQuery = await User.findOne({email:'Admin', password:req.body.password})
+            //If adminQuery has email prop, query was successful
+        req.isAdmin = adminQuery.email ? true : false
+    }
 
     const authHeader = req.headers['authorization']
 
@@ -19,25 +28,24 @@ const authenticateToken = (req, res, next)=>{
     if(!token)
         return res.status(401).json({
             message: "No access token received. Send refresh token or log in with password."
-        }) 
+        })
 
-        //Might have to promisify this, because need to call next()
-        //when it's done.
-    jwt.verify(token, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, (err, user)=>{
-        if(!err){
-            const foundToken = tokenContainer.find(item=>item.accessToken === token)
-            if(foundToken){
-                req.validated = true
-                req.token = foundToken
-                return next()
+    if(!req.body.password)
+        jwt.verify(token, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, (err, user)=>{
+            if(!err){
+                const foundToken = tokenContainer.find(item=>item.accessToken === token)
+                if(foundToken){
+                    req.validated = true
+                    req.token = foundToken
+                    return next()
+                }
             }
-        }
 
-        return res.status(401).json({
-            message: "Access token expired. Send refresh token or log in with password."
-        })                  
-    })
-
+            return res.status(401).json({
+                message: "Access token expired. Send refresh token or log in with password."
+            })
+        })
+    else return next()
 }
 
 module.exports = {
