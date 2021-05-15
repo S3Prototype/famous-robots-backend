@@ -84,7 +84,7 @@ router.post('/vote', authenticateToken, (req, res, next)=>{
     })
 })
 
-router.post('/delete', (req, res, next)=>{
+router.post('/delete', authenticateToken, (req, res, next)=>{
     if(!req.body.robot){
         return res.status(400).json({message: `Please select the robot you wish to delete.`})
     }
@@ -103,11 +103,10 @@ router.post('/delete', (req, res, next)=>{
     })
 })
 
-router.post('/addrobot', /*authenticateToken,*/ /*upload.single("robotImage"),*/ (req, res, next)=>{
+router.post('/addrobot', authenticateToken, /*upload.single("robotImage"),*/ (req, res, next)=>{
 
-    // Have to check if they even sent an image. If not, return with error.
-    // if(!req.isAdmin || !req.validated)
-    //     return res.status(401).json({message: `Please log in as an admin to add a robot.`})
+    if(!req.validated)
+        return res.status(401).json({message: `Please log in as an admin to add a robot.`})
 
     if(!req.body.data){
         return res.status(400).json({message: `Please add an image for your robot.`})
@@ -150,13 +149,8 @@ router.post('/addrobot', /*authenticateToken,*/ /*upload.single("robotImage"),*/
     )
 })
 
-router.post('/edit', (req, res, next)=>{
+router.post('/edit', authenticateToken, (req, res, next)=>{
 
-    // Have to check if they even sent an image. If not, return with error.
-    // if(!req.isAdmin || !req.validated)
-    //     return res.status(401).json({message: `Please log in as an admin to add a robot.`})
-
-    // Update watever they've added.
     if(!req.body.original || !req.body.new)
         return res.status(400).json({message: `Error. The client did not send enough information about the robot to edit it.`})
 
