@@ -88,17 +88,16 @@ router.post('/login', authenticateToken, (req, res, next)=>{
 router.post('/register', async (req, res)=>{
 
     if(!req.body.email || !validator.is_email_valid(req.body.email) || !req.body.password)
-        return res.status(400).send({info: 'Failed to register. Please provide an email and password.'})
+        return res.status(400).send({message: 'Failed to register. Please provide an email and password.'})
 
     User.findOne({email:req.body.email},
         async (err, userData)=>{
             if(err){
-                return res.status(502).json({success: false, message: `Failed to register ${req.body.email}. Possible database rror. Please try again.`})          
+                return res.status(502).json({message: `Failed to register ${req.body.email}. Possible database rror. Please try again.`})          
             }
             if(!userData){
                 const robotSet = await Robot.find()
                 const newUserData = {
-                    name: req.body.name,
                     _id: new ObjectID(),
                     email: req.body.email,
                     isAdmin: false,
@@ -112,17 +111,26 @@ router.post('/register', async (req, res)=>{
                     newUser.isNew = true
                     await newUser.save()
 
+                    newUserData.accessToken = jwt.sign({email}, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, {expiresIn: '24h'})
+
+                    newUserData.refreshToken = jwt.sign({email}, process.env.REFRESH_SECRET || DEFAULT_REFRESH_SECRET)
+
+                    tokenContainer.push({
+                        accessToken: newUserData.accessToken, 
+                        email: email
+                    })
+
                     return res.status(200).json({
                         userData: newUserData,
                         robotSet: robotSet.reverse(),
                         message: `User ${newUserData.email} created`,   
                     })
                 } catch(err){
-                    return res.status(502).json({success: false, message: `Failed to create ${newUserData.email}.`})
+                    return res.status(502).json({message: `Failed to create ${newUserData.email}.`})
                 }                
-            } else {
-                return res.status(400).json({success: false, message: `User ${req.body.email} already exists`})
-            }                        
+            }
+            
+            return res.status(400).json({message: `User ${req.body.email} already exists`})                                    
         }
     )
 })
