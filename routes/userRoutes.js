@@ -111,13 +111,13 @@ router.post('/register', async (req, res)=>{
                     newUser.isNew = true
                     await newUser.save()
 
-                    newUserData.accessToken = jwt.sign({email}, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, {expiresIn: '24h'})
+                    newUserData.accessToken = jwt.sign({email:req.body.email}, process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET, {expiresIn: '24h'})
 
-                    newUserData.refreshToken = jwt.sign({email}, process.env.REFRESH_SECRET || DEFAULT_REFRESH_SECRET)
+                    newUserData.refreshToken = jwt.sign({email:req.body.email}, process.env.REFRESH_SECRET || DEFAULT_REFRESH_SECRET)
 
                     tokenContainer.push({
                         accessToken: newUserData.accessToken, 
-                        email: email
+                        email: req.body.email
                     })
 
                     return res.status(200).json({
@@ -126,6 +126,7 @@ router.post('/register', async (req, res)=>{
                         message: `User ${newUserData.email} created`,   
                     })
                 } catch(err){
+                    console.log("Error registering user", err)
                     return res.status(502).json({message: `Failed to create ${newUserData.email}.`})
                 }                
             }
