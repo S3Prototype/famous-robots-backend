@@ -12,8 +12,8 @@ router.get('/all', authenticateToken, async (req, res, next)=>{
     }
 
     try {
-        const robots = await Robot.find()
-        return res.status(200).send({message: `You are authorized to access the robots list.`, robots})
+        const robotSet = await Robot.find()
+        return res.status(200).send({message: `You are authorized to access the robots list.`, robots: robotSet.reverse()})
     } catch (err) {
         return res.status(502).json({message: `Could not get robots. Possible database error.`})
     }
@@ -103,7 +103,7 @@ router.post('/delete', authenticateToken, (req, res, next)=>{
     })
 })
 
-router.post('/addrobot', authenticateToken, /*upload.single("robotImage"),*/ (req, res, next)=>{
+router.post('/add', authenticateToken, /*upload.single("robotImage"),*/ (req, res, next)=>{
 
     if(!req.validated)
         return res.status(401).json({message: `Please log in as an admin to add a robot.`})
