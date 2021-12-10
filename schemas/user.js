@@ -4,7 +4,7 @@ const user = new mongoose.Schema({
     name: String,
     email: String,
     password: String,
-    votedForIDs: Array, //robots the user has seen already
+    votedForIDs: Array, //robots the user has voted for already
     isAdmin: Boolean,
 })
 
