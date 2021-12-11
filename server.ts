@@ -1,8 +1,8 @@
-const express = require('express')
-const app = express()
+import express from 'express';
+const app: express.Application = express();
 const cors = require('cors')
 const mongoose = require('mongoose')
-const Robot = require('./schemas/robot')
+import { Robot, robotModel  } from './schemas/robot'; './schemas/robot';
 const robotRoutes = require('./routes/robotRoutes')
 const authRoutes = require('./routes/authRoutes')
 const userRoutes = require('./routes/userRoutes')
@@ -14,7 +14,7 @@ mongoose.connect(
         useNewUrlParser:true,
         useUnifiedTopology:true
     },
-    (err)=>{
+    (err:any)=>{
         if(err)
             return console.log("Mongoose connection failed", err)
 
@@ -34,7 +34,7 @@ app.use('/robots', robotRoutes)
 app.use('/refreshToken', authRoutes)
 
 app.get('/', async (req, res)=>{
-    const robotList = await Robot.find()
+    const robotList:Robot[] = await robotModel.find()
     res.send(`Robot voting Backend by Shaquil Hansford.
         Current Robots:<br/> ${robotList.map(bot=>`<br />${bot.name}<br /><img style='max-width:200px' src='${bot.image}'/><br />`)} \n
         <h1 style='margin-bottom:200px'>Frontend coming soon!</h1>
