@@ -6,7 +6,6 @@ export interface User {
   password: string;
   votedForIDs: string[];
   isAdmin: boolean;
-  loggedIn?: boolean;
 }
 
 const user = new mongoose.Schema<User>({

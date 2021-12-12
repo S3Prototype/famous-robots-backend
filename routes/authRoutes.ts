@@ -1,25 +1,30 @@
-const express = require("express");
+import { AuthToken } from "./../utils/authHandler";
+import express from "express";
 const router = express.Router();
-const jwt = require("jsonwebtoken");
-const {
+import jwt from "jsonwebtoken";
+import {
   DEFAULT_ACCESS_SECRET,
   DEFAULT_REFRESH_SECRET,
-} = require("../utils/backupSecrets");
-const { tokenContainer } = require("../utils/authHandler");
+} from "../utils/backupSecrets";
+import { tokenContainer } from "../utils/authHandler";
 
 //This is sent after the original authentication attempt fails.
-router.post("/", (req, res) => {
+router.post("/", (req: any, res: any) => {
   const refreshToken = req.body.token;
 
   if (!refreshToken) return res.sendStatus(401);
 
-  if (!tokenContainer.some((item) => item.refreshToken === refreshToken))
+  if (
+    !tokenContainer.some(
+      (item: AuthToken) => item.refreshToken === refreshToken
+    )
+  )
     return res.sendStatus(403);
 
   jwt.verify(
     refreshToken,
     process.env.REFRESH_SECRET || DEFAULT_REFRESH_SECRET,
-    (err, user) => {
+    (err: any, user: any) => {
       if (err) return res.sendStatus(403);
 
       const accessToken = jwt.sign(
@@ -33,4 +38,4 @@ router.post("/", (req, res) => {
   );
 });
 
-module.exports = router;
+export default router;

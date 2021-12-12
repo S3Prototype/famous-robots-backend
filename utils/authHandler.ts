@@ -1,15 +1,15 @@
 import jwt from "jsonwebtoken";
-const User = require("../schemas/user");
-const { DEFAULT_ACCESS_SECRET } = require("./backupSecrets");
+import { DEFAULT_ACCESS_SECRET } from "./backupSecrets";
 
 export interface AuthToken {
-  refreshToken: any;
+  refreshToken?: any;
   accessToken: any;
+  email?: any;
 }
 
 export let tokenContainer: AuthToken[] = [];
 
-export const authenticateToken = async (req, res, next) => {
+export const authenticateToken = async (req: any, res: any, next: any) => {
   res.set({ "Content-Type": "application/json" });
 
   req.validated = false;
@@ -29,7 +29,7 @@ export const authenticateToken = async (req, res, next) => {
   jwt.verify(
     token,
     process.env.ACCESS_SECRET || DEFAULT_ACCESS_SECRET,
-    (err, user) => {
+    (err: any, userData: any) => {
       if (!err) {
         const foundToken = tokenContainer.find(
           (item) => item.accessToken === token
