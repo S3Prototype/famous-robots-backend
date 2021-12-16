@@ -8,8 +8,9 @@
 
 
 #images:
-/uploads
-/robotImages
+build
+uploads
+robotImages
 **/*.png
 **/*.jpg
 **/*.gif
